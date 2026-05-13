@@ -111,6 +111,8 @@ class LoggingContextMiddleware(BaseHTTPMiddleware):
                     user_id = payload.get("sub")
                     if user_id:
                         bind_context(user_id=user_id)
+                        # 同时写入 request.state，供限流器 get_user_id() 读取
+                        request.state.user_id = user_id
                 except JWTError:
                     # token 无效时不在中间件失败，交给鉴权依赖处理
                     pass

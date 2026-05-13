@@ -85,7 +85,7 @@ def build_chat_request_log_payload(chat_request: ChatRequest) -> dict:
 
 
 @router.post("/chat", response_model=ChatResponse)
-@limiter.limit(settings.RATE_LIMIT_ENDPOINTS["chat"][0])
+@limiter.limit(settings.RATE_LIMIT_ENDPOINTS["chat"][0])  # limiter.limit就是装饰器，添加限流限制
 async def chat(
     request: Request,
     chat_request: ChatRequest,
