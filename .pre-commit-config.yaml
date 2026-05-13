@@ -1,0 +1,43 @@
+repos:
+  # General file hygiene 基础文件检查
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+        exclude: ^\.vscode/
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: no-commit-to-branch
+        args: ["--branch", "master"]
+
+  # Secrets detection  密钥泄露检查
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ["--baseline", ".secrets.baseline"]
+        exclude: \.env\.example$
+
+  # Ruff: linting + formatting (replaces black, isort, flake8) Ruff 检查和格式化
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.4
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+      - id: ruff-format
+
+  # Pyright: static type checker (runs in project venv via uv) Pyright 类型检查
+  - repo: local
+    hooks:
+      - id: pyright
+        name: pyright
+        entry: uv run pyright
+        language: system
+        types: [python]
+        pass_filenames: false
+        require_serial: true

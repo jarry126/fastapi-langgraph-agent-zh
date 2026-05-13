@@ -1,0 +1,7 @@
+# Enforce LF line endings for scripts and env files
+# .gitattributes 是 Git 的项目级文件属性配置。
+# 强制这些文件使用 LF 换行符：无论开发者用 Windows、macOS 还是 Linux，提交到 Git 里的 .sh、.env、Makefile 都统一使用 LF 换行，避免脚本和构建命令出问题。
+*.sh text eol=lf
+*.env text eol=lf
+.env.* text eol=lf
+Makefile text eol=lf

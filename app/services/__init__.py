@@ -1,0 +1,9 @@
+"""应用服务模块."""
+
+from app.services.database import database_service
+from app.services.llm import (
+    LLMRegistry,
+    llm_service,
+)
+
+__all__ = ["database_service", "LLMRegistry", "llm_service"]

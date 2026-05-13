@@ -1,0 +1,204 @@
+# fastapi-langgraph-agent-zh
+
+> 基于 [fastapi-langgraph-agent-production-ready-template](https://github.com/wassim249/fastapi-langgraph-agent-production-ready-template) 的中文适配版本，面向国内开发者的生产级 LangGraph 工作流编排框架。
+
+---
+
+## 项目简介
+
+本项目是一个开箱即用的 **LangGraph + FastAPI 生产级智能体模板**，适合作为国内团队构建 AI Agent 应用的起点。
+
+在原项目基础上完成了以下工作：
+- 全面的中文注释，降低阅读和接手门槛
+- 对接阿里云 DashScope（Qwen 系列模型 + qwen-embedding）
+- 完整的本地链路调试验证（PostgreSQL + pgvector + mem0 + pg_jieba）
+- 认证流程简化、日志系统重构
+
+---
+
+## 核心能力
+
+| 能力 | 实现方式 |
+|---|---|
+| 异步 REST API | FastAPI |
+| AI Agent 工作流编排 | LangGraph（StateGraph + 工具调用） |
+| LLM 调用 / 重试 / Fallback | LangChain + tenacity |
+| 长期记忆 | mem0 + pgvector + qwen-embedding |
+| 中文语义检索 | pg_jieba 分词插件 | （待定）
+| 业务数据 + Checkpoint 持久化 | PostgreSQL + SQLModel |
+| 用户鉴权 | JWT（登录 token 全程通用） |
+| 结构化日志 | structlog（本地彩色 / 容器纯文本统一格式） |
+| 指标监控 | Prometheus + Grafana |
+| LLM 链路追踪 | Langfuse |
+| 限流 | slowapi |
+
+---
+
+## 相较于原项目的改动
+
+### 1. 认证流程简化
+
+**原流程：** 登录 → 获取 token → 调用 `/session` 换取新 token → 使用新 token 请求
+
+**现流程：** 登录 → 获取 token → 直接使用该 token 请求所有接口
+
+去除冗余的 session 换 token 步骤，客户端逻辑更简单。
+
+---
+
+### 2. 长期记忆向量化方案替换
+
+| | 原项目 | 本项目 |
+|---|---|---|
+| 向量表 | mem0migrations | longterm_memory_qwen_1024_v2 |
+| Embedding 模型 | OpenAI text-embedding | 阿里云 qwen-text-embedding-v3 |
+| 向量维度 | 1536 | 1024 |
+| 适用网络环境 | 海外 OpenAI | 国内阿里云 DashScope |
+
+---
+
+### 3. 日志系统重构
+
+所有环境统一使用 text 格式，消除本地与线上的行为差异：
+
+- **本地终端**：自动着色（INFO 绿 / WARNING 黄 / ERROR 红）
+- **Docker / K8s 容器**：`isatty()=False` 自动关闭颜色，输出纯文本
+- 运维可按固定格式拆分字段
+
+**日志行格式：**
+```
+2026-05-13 10:30:45.123 - [production] - INFO     - [6e932b38] - [chatbot.chat:138] - 收到聊天请求  {"session_id": "sess_abc", "user_id": "42", "message_count": 3}
+```
+
+---
+
+### 4. 中文注释与本地化
+
+- 所有核心模块补充中文注释
+- 日志事件名统一使用中文，去除英文 key + 中文描述的双键冗余模式
+
+---
+
+### 5. 本地完整链路验证
+
+完成以下组件的端到端测试：
+- PostgreSQL + pgvector 向量存储
+- mem0 长期记忆（search / add）
+- pg_jieba 中文分词
+- qwen-embedding 向量化
+- LangGraph 多轮对话 + 工具调用
+
+---
+
+## 技术栈
+
+```
+FastAPI · LangGraph · LangChain · PostgreSQL · pgvector
+mem0ai · pg_jieba · SQLModel · structlog · Prometheus
+Grafana · Langfuse · slowapi · tenacity · Pydantic v2
+阿里云 DashScope（Qwen LLM + qwen-embedding）
+```
+
+---
+
+## 快速启动
+
+### 环境要求
+
+- Python 3.11+
+- PostgreSQL 15+（需安装 pgvector、pg_jieba 扩展）
+- uv
+
+### 安装依赖
+
+```bash
+uv sync
+```
+
+### 配置环境变量
+
+```bash
+cp .env.example .env.development
+# 编辑 .env.development，填写数据库连接、DashScope API Key 等
+```
+
+### 启动服务
+
+```bash
+# 本地开发
+make dev
+
+# Docker 启动（API + DB）
+make docker-run
+
+# 完整栈（API + Prometheus + Grafana）
+make docker-compose-up ENV=development
+```
+
+### 接口文档
+
+```
+http://127.0.0.1:8000/docs
+```
+
+---
+
+## 常用命令
+
+```bash
+make install          # 安装依赖（uv sync）
+make dev              # 本地热加载启动（端口 8000）
+make lint             # ruff 代码检查
+make format           # ruff 格式化
+make typecheck        # pyright 类型检查
+make check            # lint + typecheck
+make eval             # 运行 LLM 评测（交互式）
+make eval-quick       # 运行 LLM 评测（默认配置）
+make docker-run       # Docker 启动 API + DB
+```
+
+---
+
+## 项目结构
+
+```
+app/
+  api/v1/            # 路由（auth.py · chatbot.py · api.py）
+  core/
+    config.py        # Pydantic Settings 配置
+    langgraph/       # LangGraph Agent 图 + 工具
+    logging.py       # structlog 日志配置
+    middleware.py    # ASGI 中间件
+    metrics.py       # Prometheus 指标
+    limiter.py       # 限流（slowapi）
+    prompts/         # 系统提示词
+  models/            # SQLModel ORM 模型
+  schemas/           # Pydantic 请求/响应模型 + 图状态
+  services/          # 业务逻辑（database · memory · llm）
+  utils/             # 公共工具函数
+evals/               # LLM 评测框架（基于 Langfuse）
+scripts/             # 环境初始化、Docker 构建脚本
+```
+
+---
+
+## 文档目录
+
+| 文档 | 说明 |
+|---|---|
+| [快速开始](docs/getting-started.md) | 本地启动、注册、登录、聊天接口示例 |
+| [架构说明](docs/architecture.md) | 项目整体架构和请求链路 |
+| [鉴权说明](docs/authentication.md) | JWT、用户 token、会话归属校验 |
+| [数据库说明](docs/database.md) | 业务表、迁移、checkpoint 表说明 |
+| [长期记忆](docs/memory.md) | mem0、pgvector、长期记忆读写流程 |
+| [LLM 服务](docs/llm-service.md) | 模型注册、重试、fallback、结构化输出 |
+| [Docker](docs/docker.md) | Docker Compose 启动方式 |
+| [配置说明](docs/configuration.md) | `.env` 配置项和环境切换 |
+| [观测说明](docs/observability.md) | 日志、Prometheus、Grafana、Langfuse |
+| [评测说明](docs/evaluation.md) | LLM 输出评测框架 |
+
+---
+
+## 致谢
+
+本项目基于 [wassim249/fastapi-langgraph-agent-production-ready-template](https://github.com/wassim249/fastapi-langgraph-agent-production-ready-template) 进行二次开发，感谢原作者的开源贡献。
