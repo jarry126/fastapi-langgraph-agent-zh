@@ -12,7 +12,6 @@ from fastapi import (
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from asgi_correlation_id import CorrelationIdMiddleware
@@ -113,8 +112,40 @@ app.add_middleware(CorrelationIdMiddleware)
 
 # slowapi 限流器需要通过 app.state.limiter 挂载，@limiter.limit() 装饰器在请求时会从这里读取配置
 app.state.limiter = limiter
-# 请求超出限流阈值时 slowapi 抛出 RateLimitExceeded，注册此处理器将其统一转为 429 响应而非 500
-# pyright: ignore 是因为 Starlette 类型签名与 slowapi 处理器签名略有出入，运行时没有问题
+
+
+async def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    """限流超限时返回友好提示，并通过 structlog 记录结构化日志.
+
+    替换 slowapi 内置的 _rate_limit_exceeded_handler，解决两个问题：
+    1. 内置 handler 直接 print 到 stdout，绕过 structlog，格式与其他日志不一致。
+    2. 内置返回体只有英文技术信息，对用户不友好。
+    """
+    limit_str = str(exc.detail) if exc.detail else "未知限额"
+    path = request.url.path
+    user_id = getattr(request.state, "user_id", None)
+    client_ip = request.client.host if request.client else "unknown"
+    rate_limit_key = f"user:{user_id}" if user_id else client_ip
+
+    logger.warning(
+        "请求频率超出限制",
+        path=path,
+        rate_limit_key=rate_limit_key,
+        limit=limit_str,
+        client_ip=client_ip,
+    )
+
+    return JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content={
+            "detail": "请求过于频繁，请稍后再试",
+            "limit": limit_str,
+            "hint": "如持续受限，请联系管理员",
+        },
+    )
+
+
+# 请求超出限流阈值时 slowapi 抛出 RateLimitExceeded，注册自定义处理器统一转为友好的 429 响应
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # pyright: ignore[reportArgumentType]
 
 

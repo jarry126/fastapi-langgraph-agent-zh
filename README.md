@@ -91,16 +91,110 @@ key_func=get_user_id,           # 按用户 ID 限流（当前）
 # key_func=get_remote_address,  # 按 IP 限流（切换时取消注释，注释上一行）
 ```
 
+#### slowapi 限流规则说明
+
+本项目使用 `app.state.limiter` 挂载方式（非 `SlowAPIMiddleware`），限流规则如下：
+
+| 场景 | 行为 |
+|---|---|
+| 接口上有 `@limiter.limit("X/minute")` | 按该接口自身配置限流，每个接口独立计数 |
+| 接口上没有 `@limiter.limit()` | **不做任何限流**，请求直接放行 |
+| `Limiter(default_limits=...)` | 在当前挂载方式下对无装饰器接口**不生效**，仅作配置留存 |
+
+> **注意**：若改用 `SlowAPIMiddleware` 中间件模式，`default_limits` 会对所有无装饰器的接口自动生效。
+> 当前选择 `app.state.limiter` 挂载是为了精确控制——只有主动声明限流的接口才受约束，避免对健康检查等内部接口误限。
+
+**当前各接口限额一览：**
+
+| 接口 | 限额 |
+|---|---|
+| `POST /chatbot/chat` | 30 次 / 分钟 |
+| `POST /chatbot/chat/stream` | 20 次 / 分钟 |
+| `GET/DELETE /chatbot/messages` | 50 次 / 分钟 |
+| `POST /auth/register` | 10 次 / 小时 |
+| `POST /auth/login` | 20 次 / 分钟 |
+| `GET /health` | 无限流 |
+| `GET /debug/rate-limit/ping`（压测专用） | 10 次 / 分钟 |
+
 ---
 
-### 5. 中文注释与本地化
+### 5. 限流错误响应优化
+
+**原项目：** 使用 slowapi 内置的 `_rate_limit_exceeded_handler`，存在两个问题：
+- 直接 `print` 到 stdout，绕过 structlog，日志格式与其他日志不一致，无法按用户追溯
+- 返回的错误信息为英文技术报错，对用户不友好
+
+**本项目：** 在 `app/main.py` 中注册自定义 handler 替换内置实现：
+
+```python
+async def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    # 通过 structlog 记录结构化日志，包含触发限流的用户/IP 和限额信息
+    logger.warning("请求频率超出限制", path=path, rate_limit_key=rate_limit_key, limit=limit_str)
+    # 返回友好的中文提示
+    return JSONResponse(status_code=429, content={"detail": "请求过于频繁，请稍后再试", ...})
+```
+
+| | 原项目 | 本项目 |
+|---|---|---|
+| 日志输出 | `print` 绕过 structlog | structlog `WARNING` 结构化日志 |
+| 日志包含限流 key | ❌ | ✅ `rate_limit_key: user:42` |
+| 客户端错误提示 | 英文技术信息 | 中文友好提示 |
+
+**触发限流时的日志示例：**
+```
+WARNING - 请求频率超出限制  {"path": "/api/v1/chatbot/chat", "rate_limit_key": "user:1", "limit": "10 per 1 minute", "client_ip": "127.0.0.1"}
+```
+
+**触发限流时客户端收到的响应：**
+```json
+{
+  "detail": "请求过于频繁，请稍后再试",
+  "limit": "10 per 1 minute",
+  "hint": "如持续受限，请联系管理员"
+}
+```
+
+---
+
+### 6. 限流压测验证（JMeter）
+
+新增专用轻量压测接口 `GET /api/v1/debug/rate-limit/ping`（仅开发 / 测试环境可用），绕开 LangGraph session 锁，可真正并发触发 slowapi 计数。
+
+**为什么需要专用压测接口？**
+
+`/chatbot/chat` 接口底层由 LangGraph 的 `AsyncPostgresSaver` 对同一 `session_id` 加数据库行锁，导致并发请求在 DB 层串行化。每次 LLM 调用约需 10~15 秒，1 分钟内只能完成约 5~9 次请求，远低于 30 次 / 分钟的限额，slowapi 没有机会触发 429。
+
+**压测结果（JMeter，15 线程，Ramp-Up=0，瞬间并发）：**
+
+```
+限额：10次 / 分钟（按用户 ID）
+
+前 10 个请求 → 200 OK（约 16~29ms）
+后  5 个请求 → 429 Too Many Requests
+```
+
+日志中可清晰看到限流 key 和限额，便于运维排查：
+```
+INFO    - 限流压测 ping          {"rate_limit_key": "user:1"}   ×10
+WARNING - 请求频率超出限制       {"rate_limit_key": "user:1", "limit": "10 per 1 minute"}  ×5
+```
+
+如需查看当前限流计数，可调用配套调试接口：
+```
+GET /api/v1/debug/rate-limit/check?user_id=1
+GET /api/v1/debug/rate-limit/storage-info
+```
+
+---
+
+### 7. 中文注释与本地化
 
 - 所有核心模块补充中文注释
 - 日志事件名统一使用中文，去除英文 key + 中文描述的双键冗余模式
 
 ---
 
-### 6. 本地完整链路验证
+### 8. 本地完整链路验证
 
 完成以下组件的端到端测试：
 - PostgreSQL + pgvector 向量存储

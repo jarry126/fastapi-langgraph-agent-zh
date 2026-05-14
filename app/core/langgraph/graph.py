@@ -230,6 +230,7 @@ class LangGraphAgent:
                 # 获取连接池；生产环境数据库不可用时可能为 None
                 connection_pool = await self._get_connection_pool()
                 if connection_pool:
+                    # LangGraph 的 AsyncPostgresSaver 在处理同一个 session 时会加数据库锁,也就是说同一个session，同一时间发出多个请求，在代码层次还是串行执行。
                     checkpointer = AsyncPostgresSaver(connection_pool)
                     await checkpointer.setup()
                 else:

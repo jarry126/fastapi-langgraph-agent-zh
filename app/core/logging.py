@@ -10,7 +10,7 @@ import logging
 import os
 import sys
 from contextvars import ContextVar
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import (
     Any,
@@ -148,15 +148,26 @@ def add_trace_context_to_event_dict(logger: Any, method_name: str, event_dict: D
 
 
 
+_CST = timezone(timedelta(hours=8))  # 中国标准时间 UTC+8
+
+
+def _now_cst() -> datetime:
+    """返回当前北京时间（UTC+8），不依赖系统时区设置."""
+    return datetime.now(_CST)
+
+
 def _format_console_timestamp(value: Any) -> str:
-    """把 structlog 的 ISO 时间转为控制台更易读的格式."""
+    """把 structlog 的 ISO 时间转为控制台更易读的格式（北京时间）."""
     if not value:
-        now = datetime.now()
+        now = _now_cst()
         return f"{now:%Y-%m-%d %H:%M:%S}.{now.microsecond // 1000:03d}"
 
     raw = str(value)
     try:
         parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        # 若是 UTC 时间（有时区信息），转换为北京时间
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(_CST)
         return f"{parsed:%Y-%m-%d %H:%M:%S}.{parsed.microsecond // 1000:03d}"
     except ValueError:
         return raw
@@ -279,7 +290,7 @@ def get_log_file_path() -> Path:
         Path: 日志文件路径。
     """
     env_prefix = settings.ENVIRONMENT.value
-    return settings.LOG_DIR / f"{env_prefix}-{datetime.now().strftime('%Y-%m-%d')}.jsonl"
+    return settings.LOG_DIR / f"{env_prefix}-{_now_cst().strftime('%Y-%m-%d')}.jsonl"
 
 
 class JsonlFileHandler(logging.Handler):
@@ -299,7 +310,7 @@ class JsonlFileHandler(logging.Handler):
         """将一条日志记录写入 JSONL 文件."""
         try:
             log_entry = {
-                "timestamp": datetime.fromtimestamp(record.created).isoformat(),
+                "timestamp": datetime.fromtimestamp(record.created, tz=_CST).isoformat(),
                 "level": record.levelname,
                 "message": record.getMessage(),
                 "module": record.module,
