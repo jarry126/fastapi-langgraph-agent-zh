@@ -25,10 +25,9 @@ RUN apt-get update && apt-get install -y \
     && pip install uv -i https://mirrors.aliyun.com/pypi/simple/ \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy pyproject.toml first to leverage Docker cache
-COPY pyproject.toml .
-RUN uv venv && . .venv/bin/activate && \
-    uv pip install -e . --index-url https://mirrors.aliyun.com/pypi/simple/
+# 同时拷贝锁定文件，确保容器与本地安装完全相同的版本
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --index-url https://mirrors.aliyun.com/pypi/simple/
 
 # Copy the application
 COPY . .
