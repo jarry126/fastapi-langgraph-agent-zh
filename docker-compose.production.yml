@@ -22,6 +22,7 @@ services:
       - "8000:8000"
     volumes:
       - ./logs:/app/logs
+      - ./.env.production:/app/.env.production:ro
     env_file:
       - .env.${APP_ENV:-production}    # 启动容器时读取，例如 .env.production
     environment:
