@@ -10,13 +10,9 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
-from app.core.config import (
-    Environment,
-    settings,
-)
+from app.core.config import settings
 from app.core.logging import logger
 
-_OPENAI_API_KEY = SecretStr(settings.OPENAI_API_KEY)
 _DASHSCOPE_API_KEY = SecretStr(settings.DASHSCOPE_API_KEY)
 _DASHSCOPE_BASE_URL = settings.DASHSCOPE_BASE_URL
 
@@ -40,41 +36,23 @@ class LLMRegistry:
             ),
         },
         {
-            "name": "gpt-5-mini",
+            "name": "qwen-max",
             "llm": ChatOpenAI(
-                model="gpt-5-mini",
-                api_key=_OPENAI_API_KEY,
+                model="qwen-max",
+                api_key=_DASHSCOPE_API_KEY,
+                base_url=_DASHSCOPE_BASE_URL,
+                temperature=settings.DEFAULT_LLM_TEMPERATURE,
                 max_completion_tokens=settings.MAX_TOKENS,
-                reasoning={"effort": "low"},
             ),
         },
         {
-            "name": "gpt-5.4",
+            "name": "qwen-turbo",
             "llm": ChatOpenAI(
-                model="gpt-5",
-                api_key=_OPENAI_API_KEY,
+                model="qwen-turbo",
+                api_key=_DASHSCOPE_API_KEY,
+                base_url=_DASHSCOPE_BASE_URL,
+                temperature=settings.DEFAULT_LLM_TEMPERATURE,
                 max_completion_tokens=settings.MAX_TOKENS,
-                reasoning={"effort": "medium"},
-            ),
-        },
-        {
-            "name": "gpt-5.4-nano",
-            "llm": ChatOpenAI(
-                model="gpt-5.4-nano",
-                api_key=_OPENAI_API_KEY,
-                max_completion_tokens=settings.MAX_TOKENS,
-                reasoning={"effort": "low"},
-            ),
-        },
-        {
-            "name": "gpt-5",
-            "llm": ChatOpenAI(
-                model="gpt-5",
-                api_key=_OPENAI_API_KEY,
-                max_completion_tokens=settings.MAX_TOKENS,
-                top_p=0.95 if settings.ENVIRONMENT == Environment.PRODUCTION else 0.8,
-                presence_penalty=0.1 if settings.ENVIRONMENT == Environment.PRODUCTION else 0.0,
-                frequency_penalty=0.1 if settings.ENVIRONMENT == Environment.PRODUCTION else 0.0,
             ),
         },
     ]
@@ -106,9 +84,7 @@ class LLMRegistry:
             if "max_tokens" in kwargs:
                 kwargs["max_completion_tokens"] = kwargs.pop("max_tokens")
             logger.debug("creating_llm_with_custom_args", model_name=model_name, custom_args=list(kwargs.keys()))
-            if model_name.startswith("qwen-"):
-                return ChatOpenAI(model=model_name, api_key=_DASHSCOPE_API_KEY, base_url=_DASHSCOPE_BASE_URL, **kwargs)
-            return ChatOpenAI(model=model_name, api_key=_OPENAI_API_KEY, **kwargs)
+            return ChatOpenAI(model=model_name, api_key=_DASHSCOPE_API_KEY, base_url=_DASHSCOPE_BASE_URL, **kwargs)
 
         logger.debug("using_default_llm_instance", model_name=model_name)
         return model_entry["llm"]
