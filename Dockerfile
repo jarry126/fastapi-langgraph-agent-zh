@@ -14,12 +14,15 @@ ENV APP_ENV=${APP_ENV} \
     PIP_DISABLE_PIP_VERSION_CHECK=on \
     PIP_DEFAULT_TIMEOUT=100
 
+# 切换 apt 源为阿里云镜像（加速国内服务器构建）
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
-    && pip install --upgrade pip \
-    && pip install uv \
+    && pip install --upgrade pip -i https://mirrors.aliyun.com/pypi/simple/ \
+    && pip install uv -i https://mirrors.aliyun.com/pypi/simple/ \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy pyproject.toml first to leverage Docker cache
