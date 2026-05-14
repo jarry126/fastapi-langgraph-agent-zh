@@ -1,0 +1,63 @@
+version: '3.8'
+
+# 生产环境 docker-compose
+# 数据库、缓存均使用阿里云托管服务，不在本地启动
+#
+# 启动方式：
+#   APP_ENV=production docker compose -f docker-compose.production.yml up -d
+#
+# ${APP_ENV:-production} 说明：
+#   - APP_ENV 是在执行 docker compose 命令前设置的 shell 环境变量
+#   - 例如：APP_ENV=production docker compose -f docker-compose.production.yml up -d
+#   - :- 表示默认值，如果 APP_ENV 没有设置，默认使用 production
+#   - Docker Compose 读取这个值后，拼接出 .env.production 文件名去读取配置
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        APP_ENV: ${APP_ENV:-production}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./logs:/app/logs
+    env_file:
+      - .env.${APP_ENV:-production}    # 启动容器时读取，例如 .env.production
+    environment:
+      - APP_ENV=${APP_ENV:-production}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: always
+
+  # Prometheus + Grafana 监控（暂时不需要，需要时取消注释）
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   ports:
+  #     - "9090:9090"
+  #   volumes:
+  #     - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+  #     - prometheus-data:/prometheus
+  #   command:
+  #     - '--config.file=/etc/prometheus/prometheus.yml'
+  #   restart: always
+
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - grafana-storage:/var/lib/grafana
+  #   environment:
+  #     - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+  #     - GF_USERS_ALLOW_SIGN_UP=false
+  #   restart: always
+
+volumes: {}
+  # prometheus-data:
+  # grafana-storage:

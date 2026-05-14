@@ -49,7 +49,6 @@ def get_user_id(request: Request) -> str:
     # 未登录请求降级为 IP 限流兜底
     return get_remote_address(request)
 
-
 # 如果配置了 Valkey，则构建分布式存储 URI
 _storage_uri = None
 if settings.VALKEY_HOST:
