@@ -24,7 +24,8 @@ RUN apt-get update && apt-get install -y \
 
 # Copy pyproject.toml first to leverage Docker cache
 COPY pyproject.toml .
-RUN uv venv && . .venv/bin/activate && uv pip install -e .
+RUN uv venv && . .venv/bin/activate && \
+    uv pip install -e . --index-url https://mirrors.aliyun.com/pypi/simple/ --extra-index-url https://pypi.org/simple/
 
 # Copy the application
 COPY . .
