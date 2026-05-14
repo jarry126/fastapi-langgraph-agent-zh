@@ -379,18 +379,14 @@ def setup_logging() -> None:
     """
     log_level = logging.DEBUG if settings.DEBUG else logging.INFO
 
-    # 控制台输出
+    # 控制台输出（运维从容器标准输出采集日志）
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(log_level)
-
-    # 每日 JSONL 文件（运维归档用）
-    file_handler = JsonlFileHandler(get_log_file_path())
-    file_handler.setLevel(log_level)
 
     logging.basicConfig(
         format="%(message)s",
         level=log_level,
-        handlers=[console_handler, file_handler],
+        handlers=[console_handler],
     )
 
     # 第三方 HTTP 客户端日志太吵，只保留 WARNING 以上
