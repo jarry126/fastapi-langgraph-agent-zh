@@ -161,6 +161,9 @@ class Settings:
         self.MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2000"))
         self.MAX_LLM_CALL_RETRIES = int(os.getenv("MAX_LLM_CALL_RETRIES", "3"))
         self.LLM_TOTAL_TIMEOUT = int(os.getenv("LLM_TOTAL_TIMEOUT", "60"))
+        # LangGraph 最大递归次数：chat → tool_call 算 2 步，10 轮工具调用 = 20 步，留一点余量设 25
+        # 超出后 LangGraph 抛出 GraphRecursionError，防止 LLM 陷入无限循环
+        self.LANGGRAPH_RECURSION_LIMIT = int(os.getenv("LANGGRAPH_RECURSION_LIMIT", "25"))
 
         # 长期记忆配置
         self.LONG_TERM_MEMORY_MODEL = os.getenv("LONG_TERM_MEMORY_MODEL", self.DEFAULT_LLM_MODEL)

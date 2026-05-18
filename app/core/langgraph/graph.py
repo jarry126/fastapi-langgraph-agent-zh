@@ -18,7 +18,7 @@ from langchain_core.messages import (
     convert_to_openai_messages,
 )
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-from langgraph.errors import GraphInterrupt
+from langgraph.errors import GraphInterrupt, GraphRecursionError
 from langgraph.graph import (
     END,
     StateGraph,
@@ -168,7 +168,7 @@ class LangGraphAgent:
             logger.info("大模型回答已生成", session_id=thread_id, model=model_name)
 
             # 根据响应是否包含工具调用决定下一个节点：
-            # 有工具调用 → tool_call 节点执行工具 → 再回到 chat
+            # 有工具调用 → tool_call 节点执行工具 → 再回到 chat（TODO 不断循环，只调没有工具调用，但是这也有一个问题，可能会无限循环，所以需要有最大循环次数）
             # 无工具调用 → 直接结束
             if isinstance(response_message, AIMessage) and response_message.tool_calls:
                 goto = "tool_call"
@@ -311,6 +311,8 @@ class LangGraphAgent:
         config: RunnableConfig = {
             "configurable": {"thread_id": session_id},
             "callbacks": callbacks,
+            # recursion_limit：chat→tool_call 算 2 步，超出后抛 GraphRecursionError，防止无限循环
+            "recursion_limit": settings.LANGGRAPH_RECURSION_LIMIT,
             "metadata": {
                 "user_id": user_id,
                 "username": username,
@@ -358,6 +360,16 @@ class LangGraphAgent:
             interrupt_value = state.tasks[0].interrupts[0].value if state.tasks else "Waiting for input."
             logger.info("图流程已中断等待用户输入", session_id=session_id, interrupt_value=str(interrupt_value))
             return [Message(role="assistant", content=str(interrupt_value))]
+        except GraphRecursionError:
+            logger.warning(
+                "graph_recursion_limit_exceeded",
+                session_id=session_id,
+                recursion_limit=settings.LANGGRAPH_RECURSION_LIMIT,
+            )
+            return [Message(
+                role="assistant",
+                content="抱歉，这个问题需要的处理步骤过多，我无法完成。请尝试拆分问题或换一种方式提问。",
+            )]
         except Exception as e:
             logger.exception("get_response_failed", error=str(e), session_id=session_id)
             raise
@@ -384,6 +396,7 @@ class LangGraphAgent:
         config: RunnableConfig = {
             "configurable": {"thread_id": session_id},
             "callbacks": callbacks,
+            "recursion_limit": settings.LANGGRAPH_RECURSION_LIMIT,
             "metadata": {
                 "user_id": user_id,
                 "username": username,
@@ -436,6 +449,13 @@ class LangGraphAgent:
             interrupt_value = state.tasks[0].interrupts[0].value if state.tasks else "Waiting for input."
             logger.info("流式图流程已中断等待用户输入", session_id=session_id, interrupt_value=str(interrupt_value))
             yield str(interrupt_value)
+        except GraphRecursionError:
+            logger.warning(
+                "graph_recursion_limit_exceeded",
+                session_id=session_id,
+                recursion_limit=settings.LANGGRAPH_RECURSION_LIMIT,
+            )
+            yield "抱歉，这个问题需要的处理步骤过多，我无法完成。请尝试拆分问题或换一种方式提问。"
         except Exception as stream_error:
             logger.exception("stream_processing_failed", error=str(stream_error), session_id=session_id)
             raise stream_error
