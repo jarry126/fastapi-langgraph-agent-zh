@@ -41,6 +41,8 @@ dependencies = [
     "uvloop>=0.22.1; platform_system != 'Windows'",
     "asgi-correlation-id>=4.3.4",
     "alembic>=1.18.4",
+    "mcp>=1.27.1",
+    "langchain-mcp-adapters>=0.2.2",
 ]
 
 # 可选依赖。

@@ -148,6 +148,12 @@ class Settings:
         # LangGraph 配置
         self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
         self.DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY", "")
+
+        # MCP 工具配置
+        # 高德地图 MCP：https://lbs.amap.com/api/mcp-server/summary
+        # 申请地址：https://lbs.amap.com/dev/key/app
+        self.AMAP_API_KEY = os.getenv("AMAP_API_KEY", "")
+        self.AMAP_MCP_ENABLED = os.getenv("AMAP_MCP_ENABLED", "true").lower() in ("true", "1", "yes")
         self.DASHSCOPE_BASE_URL = os.getenv("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
         self.DEFAULT_LLM_MODEL = os.getenv("DEFAULT_LLM_MODEL", "gpt-5-mini")
         self.SESSION_NAMING_ENABLED = os.getenv("SESSION_NAMING_ENABLED", "true").lower() == "true"

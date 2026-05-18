@@ -9,6 +9,7 @@ from typing import (
 from urllib.parse import quote_plus
 
 from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.tools.base import BaseTool
 from langchain_core.messages import (
     AIMessage,
     AIMessageChunk,
@@ -45,7 +46,7 @@ from app.core.config import (
     Environment,
     settings,
 )
-from app.core.langgraph.tools import tools
+from app.core.langgraph.tools import static_tools, load_all_tools
 from app.core.logging import logger
 from app.core.metrics import llm_inference_duration_seconds
 from app.core.observability import langfuse_callback_handler
@@ -73,11 +74,15 @@ class LangGraphAgent:
     """
 
     def __init__(self):
-        """使用必要组件初始化 LangGraph 智能体."""
-        # 使用已绑定工具的 LLM 服务
+        """使用必要组件初始化 LangGraph 智能体.
+
+        注意：工具绑定（含 MCP 工具）在 create_graph() 中异步完成。
+        __init__ 阶段先用静态工具占位，确保同步初始化不阻塞。
+        """
         self.llm_service = llm_service
-        self.llm_service.bind_tools(tools)
-        self.tools_by_name = {tool.name: tool for tool in tools}
+        # 先绑定静态工具（同步），MCP 工具在 create_graph() 异步加载后重新绑定
+        self.llm_service.bind_tools(static_tools)
+        self.tools_by_name: dict[str, BaseTool] = {tool.name: tool for tool in static_tools}
         self._connection_pool: Optional[PostgresConnPool] = None
         self._graph: Optional[CompiledStateGraph] = None
         logger.info(
@@ -216,6 +221,17 @@ class LangGraphAgent:
         """
         if self._graph is None:
             try:
+                # 异步加载全部工具（静态工具 + MCP 工具），然后重新绑定给 LLM
+                # MCP 加载失败时 load_all_tools() 会自动降级，这里无需额外处理
+                all_tools = await load_all_tools()
+                self.llm_service.bind_tools(all_tools)
+                self.tools_by_name = {tool.name: tool for tool in all_tools}
+                logger.info(
+                    "agent_tools_bound",
+                    tool_names=list(self.tools_by_name.keys()),
+                    total=len(all_tools),
+                )
+
                 graph_builder = StateGraph(GraphState)
                 graph_builder.add_node("chat", self._chat, destinations=("tool_call", END))
                 graph_builder.add_node(
