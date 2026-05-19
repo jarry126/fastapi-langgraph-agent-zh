@@ -17,12 +17,13 @@
 from langchain_core.tools.base import BaseTool
 
 from .ask_human import ask_human
+from .calculator import calculator
 from .duckduckgo_search import duckduckgo_search_tool
 from .mcp_client import get_langchain_mcp_tools
 from .amap_mcp import get_amap_mcp_servers
 
 # 静态工具：同步加载，始终可用
-static_tools: list[BaseTool] = [duckduckgo_search_tool, ask_human]
+static_tools: list[BaseTool] = [duckduckgo_search_tool, calculator, ask_human]
 
 
 async def load_all_tools() -> list[BaseTool]:
